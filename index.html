@@ -119,7 +119,7 @@
         button.disabled = true;
         buttonText.innerHTML = '<span class="loading-spinner"></span> Analizando...';
         resultDiv.style.display = 'none';
-        justificationDiv.innerHTML = '<p>Consultando al Auditor Virtual Gemini...</p>';
+        justificationDiv.innerHTML = '<p>Consultando al Auditor Virtual...</p>';
 
 
         const systemPrompt = "Eres un auditor experto en BASC e ISO 27001 y un especialista en seguridad de la información. Tu tarea es analizar la descripción de un activo de información proporcionada por un empleado de COLTRACK S.A.S. (empresa de logística) y clasificarlo estrictamente en uno de los cuatro niveles definidos: 'PÚBLICA', 'INTERNA', 'CONFIDENCIAL', o 'RESTRINGIDA'. Debes proporcionar esta información en el formato JSON solicitado. La justificación debe ser concisa y específica, basada en la criticidad y el impacto potencial de su divulgación (legal, económico, estratégico).";

@@ -54,8 +54,8 @@ module.exports = async (req, res) => {
         const geminiResult = await geminiResponse.json();
 
         if (!geminiResponse.ok || !geminiResult.candidates) {
-             const errorDetail = geminiResult.error?.message || 'Error desconocido al contactar a Gemini.';
-             console.error("Gemini Error:", errorDetail);
+             const errorDetail = geminiResult.error?.message || 'Error desconocido al contactar la IA.';
+             console.error("IA Error:", errorDetail);
              return res.status(500).json({ error: 'Fallo en la API de clasificación. ' + errorDetail });
         }
         
