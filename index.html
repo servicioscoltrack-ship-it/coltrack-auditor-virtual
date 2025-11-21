@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auditor Virtual de Clasificación de Información (COLTRACK)</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600&family=Lato:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        /* Estilos generales */
+        body { font-family: 'Lato', sans-serif; background-color: #f8fafc; color: #334155; padding: 20px; }
+        .container { max-width: 700px; margin: 0 auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 10px 20px rgba(0,0,0,0.05); }
+        h1 { font-family: 'Poppins', sans-serif; font-size: 28px; color: #0c4a6e; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 20px; }
+        h3 { color: #1e3a8a; margin-top: 20px; }
+        textarea {
+            width: 100%; padding: 15px; border: 2px solid #cbd5e1; border-radius: 8px;
+            resize: vertical; font-size: 16px; font-family: 'Lato', sans-serif; min-height: 120px;
+        }
+        button {
+            padding: 12px 20px; background-color: #3b82f6; color: white; border: none;
+            border-radius: 8px; cursor: pointer; font-size: 18px; font-weight: 600;
+            transition: background-color 0.3s; width: 100%; margin-top: 15px;
+        }
+        button:hover { background-color: #1e3a8a; }
+        .result-box {
+            margin-top: 20px; padding: 15px; border-radius: 8px; font-size: 20px; font-weight: 700;
+            text-align: center; display: none;
+        }
+        /* Clases de colores para los resultados */
+        .result-public { background-color: #dbeafe; color: #3b82f6; }
+        .result-internal { background-color: #dcfce7; color: #22c55e; }
+        .result-confidential { background-color: #bfdbfe; color: #1e3a8a; }
+        .result-restricted { background-color: #fee2e2; color: #ef4444; }
+        #justification-text {
+            margin-top: 15px; padding: 10px; border-left: 3px solid #cbd5e1; font-size: 16px; color: #475569;
+        }
+        /* Spinner de carga */
+        .loading-spinner {
+            border: 4px solid #f3f3f3; border-top: 4px solid #3b82f6; border-radius: 50%;
+            width: 20px; height: 20px; animation: spin 1s linear infinite; display: inline-block;
+            margin-right: 10px; vertical-align: middle;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header style="text-align: center;">
+        <!-- Logo de COLTRACK S.A.S. -->
+        <img src="https://gps.coltrack.com/gps/login/img/logo_coltrack.png" alt="Logo COLTRACK" style="height: 60px; margin-bottom: 10px; object-fit: contain;">
+        <h1>Auditor Virtual de Clasificación</h1>
+        <p>Herramienta de práctica alineada con BASC e ISO 27001</p>
+    </header>
+
+    <div id="app-area">
+        <p><strong>Describa el activo de información que desea clasificar:</strong></p>
+        <textarea id="asset-description" placeholder="Ejemplo: 'La lista de precios confidencial que se negocia con un cliente potencial.'"></textarea>
+        <button id="classify-button" onclick="handleClassification()">
+            <span id="button-text"><i class="fa-solid fa-clipboard-check"></i> Clasificar Activo</span>
+        </button>
+
+        <div id="result-area">
+            <h3>Diagnóstico:</h3>
+            <div id="classification-result" class="result-box"></div>
+            <div id="justification-text">
+                <p>Ingrese una descripción arriba para recibir una clasificación instantánea y su justificación.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // *******************************************************************
+    // 1. ENDPOINT SEGURO: Llama a la función serverless de Vercel.
+    // Vercel maneja la clave API de forma segura.
+    // *******************************************************************
+    const secureApiEndpoint = '/api/classify-asset'; 
+    
+    // Función de Retries con Backoff Exponencial
+    async function fetchWithRetry(url, options, maxRetries = 5) {
+        for (let i = 0; i < maxRetries; i++) {
+            try {
+                const response = await fetch(url, options);
+                if (response.status !== 429 && response.ok) {
+                    return response;
+                }
+                if (i < maxRetries - 1) {
+                    const delay = Math.pow(2, i) * 1000 + Math.random() * 1000;
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            } catch (error) {
+                if (i < maxRetries - 1) {
+                    const delay = Math.pow(2, i) * 1000 + Math.random() * 1000;
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                } else {
+                    throw error;
+                }
+            }
+        }
+        throw new Error("Límite de reintentos alcanzado.");
+    }
+
+
+    async function handleClassification() {
+        const description = document.getElementById('asset-description').value.trim();
+        const resultDiv = document.getElementById('classification-result');
+        const justificationDiv = document.getElementById('justification-text');
+        const button = document.getElementById('classify-button');
+        const buttonText = document.getElementById('button-text');
+
+        if (!description) {
+            justificationDiv.innerHTML = '<strong style="color: #ef4444;">Por favor, describa un activo de información para clasificar.</strong>';
+            resultDiv.style.display = 'none';
+            return;
+        }
+
+        // 2. Mostrar estado de carga y deshabilitar botón
+        button.disabled = true;
+        buttonText.innerHTML = '<span class="loading-spinner"></span> Analizando...';
+        resultDiv.style.display = 'none';
+        justificationDiv.innerHTML = '<p>Consultando al Auditor Virtual Gemini...</p>';
+
+
+        const systemPrompt = "Eres un auditor experto en BASC e ISO 27001 y un especialista en seguridad de la información. Tu tarea es analizar la descripción de un activo de información proporcionada por un empleado de COLTRACK S.A.S. (empresa de logística) y clasificarlo estrictamente en uno de los cuatro niveles definidos: 'PÚBLICA', 'INTERNA', 'CONFIDENCIAL', o 'RESTRINGIDA'. Debes proporcionar esta información en el formato JSON solicitado. La justificación debe ser concisa y específica, basada en la criticidad y el impacto potencial de su divulgación (legal, económico, estratégico).";
+        
+        const userQuery = `Clasifica el siguiente activo de información de COLTRACK S.A.S.: "${description}"`;
+        
+        // El payload que se envía a la función Serverless de Vercel
+        const payloadForServerless = {
+            prompt: userQuery,
+            systemInstruction: systemPrompt,
+        };
+
+        try {
+            // 3. Llamada al Endpoint Seguro de Vercel (el backend añade la API Key)
+            const response = await fetchWithRetry(secureApiEndpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payloadForServerless)
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Error HTTP: ${response.status}`);
+            }
+
+            // 4. El servidor Vercel devuelve el JSON de clasificación
+            const result = await response.json(); 
+            const { clasificacion, justificacion } = result;
+
+            if (!clasificacion) {
+                throw new Error("Respuesta no válida del servidor.");
+            }
+            
+            // 5. Procesar y Mostrar Resultados
+            resultDiv.className = 'result-box';
+            
+            let colorClass = '';
+            let icon = '';
+
+            switch (clasificacion) {
+                case 'PÚBLICA': colorClass = 'result-public'; icon = '<i class="fa-solid fa-globe"></i>'; break;
+                case 'INTERNA': colorClass = 'result-internal'; icon = '<i class="fa-solid fa-building"></i>'; break;
+                case 'CONFIDENCIAL': colorClass = 'result-confidential'; icon = '<i class="fa-solid fa-lock"></i>'; break;
+                case 'RESTRINGIDA': colorClass = 'result-restricted'; icon = '<i class="fa-solid fa-triangle-exclamation"></i>'; break;
+                default: colorClass = 'result-internal'; icon = '<i class="fa-solid fa-question-circle"></i>';
+            }
+
+            resultDiv.classList.add(colorClass);
+            resultDiv.innerHTML = `${icon} CLASIFICACIÓN SUGERIDA: ${clasificacion}`;
+            justificationDiv.innerHTML = `<strong>Justificación del Auditor:</strong> ${justificacion}`;
+            resultDiv.style.display = 'block';
+
+        } catch (error) {
+            console.error("Error al obtener clasificación:", error);
+            justificationDiv.innerHTML = `<p style="color: #ef4444;"><strong>Error de Conexión:</strong> No se pudo contactar al servidor seguro. Revise las variables de entorno de Vercel.</p>`;
+            resultDiv.style.display = 'none';
+
+        } finally {
+            // 6. Restaurar botón
+            button.disabled = false;
+            buttonText.innerHTML = '<i class="fa-solid fa-clipboard-check"></i> Clasificar Activo';
+        }
+    }
+</script>
+
+</body>
+</html>
